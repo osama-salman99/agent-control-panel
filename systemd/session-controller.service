@@ -1,0 +1,28 @@
+[Unit]
+Description=session-controller (resume/stop Claude sessions at session.osmosis.work)
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+# Runs as root because it shells out to `docker exec` into the Coder workspace
+# container. Binds 127.0.0.1:8221 only; Caddy terminates TLS for
+# session.osmosis.work and proxies here. Its predecessor on 8220
+# (remote-control-server) was deleted on 2026-08-09; nothing listens there.
+ExecStart=/usr/bin/python3 /opt/session-controller/server.py
+# SSO_SIGNING_KEY. Shared with every other admin surface on this VPS — this
+# service validates the osmosis_sso cookie, it never checks a password.
+EnvironmentFile=/root/.secrets/admin-auth.env
+Restart=on-failure
+RestartSec=5
+
+# Fleet rule on this 7.7GB VPS: every unit gets a memory cap. Nothing heavy runs
+# here — the claude processes it starts are parented to the container runtime and
+# charged to the CONTAINER cgroup, not to this unit, so this only ever bounds the
+# HTTP server itself (~30M RSS). Generous headroom over that, so a runaway is
+# bounded while normal use never approaches it.
+MemoryHigh=320M
+MemoryMax=384M
+
+[Install]
+WantedBy=multi-user.target
